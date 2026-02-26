@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  # 1. Le service Base de données
+  db-service:
+    image: redis:alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - app-network
+
+  # 2. Le service Application Web
+  web:
+    image: counter-app:1.0
+    build: .
+    ports:
+      - "${HOST_PORT}:5000"
+    networks:
+      - app-network
+    depends_on:
+      - db-service
+
+# 3. Déclaration du réseau
+networks:
+  app-network:
+    driver: bridge
+
+# 4. Déclaration du volume persistant
+volumes:
+  redis-data:
+

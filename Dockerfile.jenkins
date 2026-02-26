@@ -1,0 +1,14 @@
+# On part de l'image officielle de Jenkins
+FROM jenkins/jenkins:lts
+
+# On passe en utilisateur administrateur (root) pour pouvoir installer des paquets
+USER root
+
+# Installation du client Docker à l'intérieur de Jenkins
+RUN apt-get update && \
+    apt-get install -y docker.io && \
+    rm -rf /var/lib/apt/lists/*
+
+# On reste délibérément en utilisateur root pour ce TP
+# Cela évitera les problèmes de permissions "Permission denied"
+# au moment de lire le fichier docker.sock de ta machine hôte.

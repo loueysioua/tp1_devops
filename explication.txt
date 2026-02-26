@@ -1,0 +1,15 @@
+Analyse : Pourquoi ne peut-on pas accéder aux 3 instances sur le même port hôte ?
+
+un port réseau physique sur une machine hôte (ici, ton port 80) ne peut être utilisé que par un seul processus à la fois. Quand Docker essaie de démarrer le 2ème conteneur web, il tente de lier à nouveau le port 80 de l'ordinateur au port 5000 de ce nouveau conteneur. le système d'exploitation refuse, car le port 80 est déjà réservé par le 1er conteneur web.
+
+La Solution Théorique : Le Load Balancer
+Comment ça marche théoriquement ?
+
+On supprime l'exposition directe :
+On enlève la section ports: - "${HOST_PORT}:5000" du service web dans le docker-compose.yml. Les 3 conteneurs web ne seront accessibles que via le réseau interne app-network.
+
+On ajoute un service intermédiaire :
+On crée un nouveau conteneur (ex: Nginx). C'est lui seul qui exposera le port 80:80 vers la machine hôte.
+
+La répartition (Load Balancing) :
+Quand on va taper http://localhost:80, la requête arrivera sur le Load Balancer. Celui-ci va distribuer le trafic équitablement à tour de rôle vers le conteneur web-1, puis web-2, puis web-3 via le réseau interne de Docker.
