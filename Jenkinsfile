@@ -21,7 +21,7 @@ pipeline {
                 echo 'Exécution des tests unitaires...'
                 // Jenkins arrête AUTOMATIQUEMENT le pipeline si une commande "sh" échoue (code de retour != 0).
                 // Adapte cette ligne selon le langage de ton app (ex: npm test, pytest, go test)
-                sh 'python -m unittest discover'
+                sh 'python3 -m unittest discover'
             }
         }
 
