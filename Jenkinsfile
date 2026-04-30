@@ -10,18 +10,44 @@ pipeline {
         stage('Checkout') {
             steps {
                 echo 'Récupération du code source depuis Git...'
-                // Si tu as configuré ton pipeline depuis l'interface "Pipeline from SCM",
-                // Jenkins fera le checkout automatiquement. Sinon, utilise cette commande :
                 checkout scm
+            }
+        }
+
+        stage('Build/Install') {
+            steps {
+                echo 'Installation des dépendances...'
+                sh 'pip3 install --break-system-packages -r requirements.txt'
             }
         }
 
         stage('Unit Tests') {
             steps {
                 echo 'Exécution des tests unitaires...'
-                // Jenkins arrête AUTOMATIQUEMENT le pipeline si une commande "sh" échoue (code de retour != 0).
-                // Adapte cette ligne selon le langage de ton app (ex: npm test, pytest, go test)
                 sh 'python3 -m unittest discover'
+            }
+        }
+
+        stage('Static Analysis') {
+            steps {
+                echo 'Analyse du code avec SonarQube...'
+                script {
+                    // Si sonar-scanner est configuré comme un outil Jenkins (Global Tool Configuration)
+                    // on peut l'appeler ainsi. Sinon, on utilise la commande directe.
+                    // def scannerHome = tool 'sonar-scanner'
+                    withSonarQubeEnv('sonarqube') {
+                        sh 'sonar-scanner'
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                echo 'Vérification du Quality Gate...'
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
             }
         }
 

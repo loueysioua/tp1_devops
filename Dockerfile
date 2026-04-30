@@ -6,7 +6,7 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 # 3. Définition du répertoire de travail
 WORKDIR /app
 
-# 4. Optimisation du cache Docker : on copie D'ABORD les dépendances
+# 4. on copie D'ABORD les dépendances
 COPY requirements.txt .
 
 # 5. Installation des dépendances
