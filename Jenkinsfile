@@ -30,18 +30,16 @@ pipeline {
         stage('Analyse Statique (SonarQube)') {
             steps {
                 script {
-                    // Auto-détecte le réseau Docker sur lequel Jenkins tourne,
-                    // pour que le conteneur sonar-scanner puisse atteindre sonarqube.
+                    // Recherche le réseau dont le nom contient "app-network"
+                    // Fonctionne peu importe le nom du dossier du projet
                     def network = sh(
                         returnStdout: true,
-                        script: """
-                            docker inspect \$(hostname) \
-                              --format '{{range \$k, \$v := .NetworkSettings.Networks}}{{\$k}} {{end}}' \
-                            | tr ' ' '\\n' \
-                            | grep -v '^\$' \
-                            | head -1
-                        """
+                        script: "docker network ls --format '{{.Name}}' | grep 'app.network' | head -1"
                     ).trim()
+
+                    if (!network) {
+                        error("Aucun réseau 'app-network' trouvé. Vérifiez que docker-compose est lancé.")
+                    }
 
                     echo "Réseau détecté : ${network}"
 
