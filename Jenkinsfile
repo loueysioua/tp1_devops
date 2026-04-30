@@ -2,7 +2,8 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "loueysioua/mon-app-devops"
+        IMAGE_NAME   = "loueysioua/mon-app-devops"
+        APP_NETWORK  = "tp_docker_sioua_louey_app-network"
     }
 
     stages {
@@ -27,33 +28,17 @@ pipeline {
             }
         }
 
-        stage('Debug Network') {
-            steps {
-                sh "docker network ls --format '{{.Name}}' | grep 'app.network'"
-            }
-        }
-
         stage('Analyse Statique (SonarQube)') {
+            agent {
+                docker {
+                    image  'sonarsource/sonar-scanner-cli:latest'
+                    args   "--network ${APP_NETWORK}"
+                    reuseNode true
+                }
+            }
             steps {
-                script {
-                    // Recherche le réseau dont le nom contient "app-network"
-                    // Fonctionne peu importe le nom du dossier du projet
-                    def network = sh(
-                        returnStdout: true,
-                        script: "docker network ls --format '{{.Name}}' | grep 'app.network' | head -1"
-                    ).trim()
-
-                    if (!network) {
-                        error("Aucun réseau 'app-network' trouvé. Vérifiez que docker-compose est lancé.")
-                    }
-
-                    echo "Réseau détecté : ${network}"
-
-                    docker.image('sonarsource/sonar-scanner-cli:latest').inside("--network ${network}") {
-                        withSonarQubeEnv('sonarqube') {
-                            sh 'sonar-scanner'
-                        }
-                    }
+                withSonarQubeEnv('sonarqube') {
+                    sh 'sonar-scanner'
                 }
             }
         }
