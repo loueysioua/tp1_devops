@@ -3,10 +3,6 @@ pipeline {
 
     environment {
         IMAGE_NAME = "loueysioua/mon-app-devops"
-        // Le nom du réseau créé par docker-compose.
-        // Format : {nom_du_dossier_projet}_{nom_du_réseau}
-        // Adaptez "tp1_devops" si votre dossier s'appelle différemment.
-        APP_NETWORK = "tp1_devops_app-network"
     }
 
     stages {
@@ -17,12 +13,11 @@ pipeline {
             }
         }
 
-        // ✅ Python s'exécute dans un conteneur éphémère : pas d'installation sur l'hôte
         stage('Build & Tests Unitaires') {
             agent {
                 docker {
                     image 'python:3.11-alpine'
-                    reuseNode true   // Utilise le même workspace que l'agent principal
+                    reuseNode true
                 }
             }
             steps {
@@ -32,20 +27,29 @@ pipeline {
             }
         }
 
-        // ✅ sonar-scanner s'exécute dans son propre conteneur officiel
         stage('Analyse Statique (SonarQube)') {
-            agent {
-                docker {
-                    image 'sonarsource/sonar-scanner-cli:latest'
-                    // Doit être sur le même réseau que le conteneur sonarqube
-                    args "--network ${APP_NETWORK}"
-                    reuseNode true
-                }
-            }
             steps {
-                echo 'Analyse du code avec SonarQube...'
-                withSonarQubeEnv('sonarqube') {
-                    sh 'sonar-scanner'
+                script {
+                    // Auto-détecte le réseau Docker sur lequel Jenkins tourne,
+                    // pour que le conteneur sonar-scanner puisse atteindre sonarqube.
+                    def network = sh(
+                        returnStdout: true,
+                        script: """
+                            docker inspect \$(hostname) \
+                              --format '{{range \$k, \$v := .NetworkSettings.Networks}}{{\$k}} {{end}}' \
+                            | tr ' ' '\\n' \
+                            | grep -v '^\$' \
+                            | head -1
+                        """
+                    ).trim()
+
+                    echo "Réseau détecté : ${network}"
+
+                    docker.image('sonarsource/sonar-scanner-cli:latest').inside("--network ${network}") {
+                        withSonarQubeEnv('sonarqube') {
+                            sh 'sonar-scanner'
+                        }
+                    }
                 }
             }
         }
@@ -59,8 +63,6 @@ pipeline {
             }
         }
 
-        // ✅ Docker build/push s'exécute directement sur l'agent Jenkins
-        //    qui a accès au socket Docker via le volume /var/run/docker.sock
         stage('Docker Build') {
             steps {
                 echo "Construction de l'image Docker : ${IMAGE_NAME}:${BUILD_NUMBER}..."
