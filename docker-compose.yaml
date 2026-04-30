@@ -46,6 +46,7 @@ services:
       - SONAR_JDBC_URL=jdbc:postgresql://sonar-db:5432/sonar
       - SONAR_JDBC_USERNAME=sonar
       - SONAR_JDBC_PASSWORD=sonar
+      - SONAR_FORCEAUTHENTICATION=false
     volumes:
       - sonarqube-data:/opt/sonarqube/data
       - sonarqube-extensions:/opt/sonarqube/extensions
@@ -64,6 +65,18 @@ services:
       - POSTGRES_DB=sonar
     volumes:
       - sonar-db-data:/var/lib/postgresql/data
+
+  # 6. Utilitaire pour le scan Sonar (utilisé par le Makefile)
+  sonar-scanner:
+    image: sonarsource/sonar-scanner-cli
+    volumes:
+      - .:/usr/src
+    networks:
+      - app-network
+    environment:
+      - SONAR_HOST_URL=http://sonarqube:9000
+    depends_on:
+      - sonarqube
 
 # 3. Déclaration du réseau
 networks:

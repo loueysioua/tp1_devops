@@ -1,0 +1,53 @@
+---
+# ansible/playbooks/deploy.yml
+# Configure le kubeconfig et déploie l'application sur Kubernetes
+
+- name: "Configuration du cluster et déploiement de l'application"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    image_name:    "loueysioua/mon-app-devops"
+    image_tag:     "latest"
+    k8s_namespace: "production"
+
+  tasks:
+
+    # ── 1. Récupération du kubeconfig EKS ────────────────────────────────────
+
+    - name: "Récupération du kubeconfig depuis AWS EKS"
+      shell: >
+        aws eks update-kubeconfig
+        --name devops-tp-cluster
+        --region eu-west-1
+      changed_when: false
+
+    # ── 2. Création du namespace si absent ───────────────────────────────────
+
+    - name: "Création du namespace {{ k8s_namespace }}"
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Namespace
+        name: "{{ k8s_namespace }}"
+        state: present
+
+    # ── 3. Déploiement des manifests Kubernetes ───────────────────────────────
+
+    - name: "Application des manifests Kubernetes"
+      kubernetes.core.k8s:
+        state: present
+        template: "{{ item }}"
+      loop:
+        - "../k8s/deployment.yml.j2"
+        - "../k8s/service.yml"
+        - "../k8s/ingress.yml"
+
+    # ── 4. Attente de la disponibilité du déploiement ────────────────────────
+
+    - name: "Attente du rollout du Deployment"
+      kubernetes.core.k8s_rollout_status:
+        kind:      Deployment
+        name:      mon-app
+        namespace: "{{ k8s_namespace }}"
+        timeout:   300

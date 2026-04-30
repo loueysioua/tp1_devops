@@ -1,22 +1,17 @@
 # On part de l'image officielle de Jenkins
 FROM jenkins/jenkins:lts
 
-# On passe en utilisateur administrateur (root) pour pouvoir installer des paquets
+# On passe en root pour installer le client Docker
 USER root
 
-# Installation du client Docker, Python et Pip
+# On installe UNIQUEMENT le client Docker CLI
+# Python et sonar-scanner tournent dans leurs propres conteneurs via le pipeline
 RUN apt-get update && \
-    apt-get install -y docker.io python3 python3-pip python3-venv && \
+    apt-get install -y docker.io && \
     rm -rf /var/lib/apt/lists/*
 
-# Installation du Sonar Scanner CLI
-RUN apt-get update && apt-get install -y wget unzip && \
-    wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip && \
-    unzip sonar-scanner-cli-5.0.1.3006-linux.zip -d /opt && \
-    rm sonar-scanner-cli-5.0.1.3006-linux.zip
-# Ajout au PATH
-ENV PATH="$PATH:/opt/sonar-scanner-5.0.1.3006-linux/bin"
+# Pré-installation des plugins nécessaires au démarrage
+COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
+RUN jenkins-plugin-cli -f /usr/share/jenkins/ref/plugins.txt
 
-# On reste délibérément en utilisateur root pour ce TP
-# Cela évitera les problèmes de permissions "Permission denied"
-# au moment de lire le fichier docker.sock de ta machine hôte.
+# On reste en root pour l'accès au socket Docker de l'hôte

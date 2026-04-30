@@ -1,0 +1,3 @@
+docker-workflow:latest
+docker-plugin:latest
+sonar:latest

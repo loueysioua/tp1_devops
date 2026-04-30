@@ -1,0 +1,65 @@
+# monitoring/alerting-rules.yml
+# Règles AlertManager — à appliquer via Helm (kube-prometheus-stack)
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mon-app-alerts
+  namespace: monitoring
+  labels:
+    # Label requis par kube-prometheus-stack pour détecter automatiquement la règle
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: mon-app.rules
+      rules:
+
+        # ── Alerte : Service indisponible depuis 2 min ────────────────────────
+        - alert: MonAppDown
+          expr: up{job="mon-app"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "🔴 Service mon-app est DOWN"
+            description: >
+              Le service {{ $labels.instance }} ne répond plus depuis plus de 2 minutes.
+
+        # ── Alerte : CPU élevé ────────────────────────────────────────────────
+        - alert: MonAppHighCPU
+          expr: >
+            rate(container_cpu_usage_seconds_total{
+              namespace="production", pod=~"mon-app.*"
+            }[5m]) > 0.8
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "⚠️  CPU élevé sur mon-app"
+            description: "CPU > 80 % sur {{ $labels.pod }} depuis 5 minutes."
+
+        # ── Alerte : Mémoire élevée ───────────────────────────────────────────
+        - alert: MonAppHighMemory
+          expr: >
+            container_memory_usage_bytes{
+              namespace="production", pod=~"mon-app.*"
+            } / container_spec_memory_limit_bytes > 0.85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "⚠️  Mémoire élevée sur mon-app"
+            description: "Mémoire > 85 % sur {{ $labels.pod }} depuis 5 minutes."
+
+        # ── Alerte : Pods en redémarrage fréquent ────────────────────────────
+        - alert: MonAppPodCrashLooping
+          expr: >
+            rate(kube_pod_container_status_restarts_total{
+              namespace="production", pod=~"mon-app.*"
+            }[15m]) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "🔴 Pod mon-app en CrashLoop"
+            description: "Le pod {{ $labels.pod }} redémarre fréquemment."

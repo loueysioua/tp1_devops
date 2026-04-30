@@ -1,0 +1,128 @@
+# monitoring/prometheus-values.yml
+# Valeurs Helm pour kube-prometheus-stack
+# Installation : helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#                  -n monitoring --create-namespace -f monitoring/prometheus-values.yml
+
+grafana:
+  enabled: true
+  adminPassword: "DevOps-TP-2024!"
+
+  # Dashboard personnalisé injecté via ConfigMap
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: "custom"
+          orgId: 1
+          folder: "Mon App"
+          type: file
+          disableDeletion: false
+          options:
+            path: /var/lib/grafana/dashboards/custom
+
+  dashboards:
+    custom:
+      mon-app-dashboard:
+        json: |
+          {
+            "title": "Mon App — Production Dashboard",
+            "uid":   "mon-app-prod",
+            "panels": [
+              {
+                "title": "État des Pods (CPU %)",
+                "type":  "timeseries",
+                "gridPos": {"x":0,"y":0,"w":12,"h":8},
+                "targets": [{
+                  "expr": "rate(container_cpu_usage_seconds_total{namespace='production',pod=~'mon-app.*'}[5m]) * 100",
+                  "legendFormat": "{{pod}}"
+                }]
+              },
+              {
+                "title": "Mémoire utilisée (Mo)",
+                "type":  "timeseries",
+                "gridPos": {"x":12,"y":0,"w":12,"h":8},
+                "targets": [{
+                  "expr": "container_memory_usage_bytes{namespace='production',pod=~'mon-app.*'} / 1024 / 1024",
+                  "legendFormat": "{{pod}}"
+                }]
+              },
+              {
+                "title": "Redémarrages des Pods",
+                "type":  "stat",
+                "gridPos": {"x":0,"y":8,"w":6,"h":4},
+                "targets": [{
+                  "expr": "sum(kube_pod_container_status_restarts_total{namespace='production',pod=~'mon-app.*'})"
+                }]
+              },
+              {
+                "title": "Trafic réseau entrant (req/s)",
+                "type":  "timeseries",
+                "gridPos": {"x":6,"y":8,"w":18,"h":8},
+                "targets": [{
+                  "expr": "rate(nginx_ingress_controller_requests{ingress='mon-app-ingress'}[1m])",
+                  "legendFormat": "{{status}}"
+                }]
+              },
+              {
+                "title": "Service UP / DOWN",
+                "type":  "stat",
+                "gridPos": {"x":0,"y":12,"w":6,"h":4},
+                "targets": [{
+                  "expr": "up{job='mon-app'}"
+                }],
+                "options": {
+                  "colorMode": "background",
+                  "thresholds": {
+                    "steps": [
+                      {"value": 0, "color": "red"},
+                      {"value": 1, "color": "green"}
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+
+prometheus:
+  prometheusSpec:
+    # Scrape automatique des pods annotés avec prometheus.io/scrape: "true"
+    additionalScrapeConfigs:
+      - job_name: "mon-app"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ["production"]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+
+alertmanager:
+  config:
+    global:
+      smtp_smarthost:  "smtp.gmail.com:587"
+      smtp_from:       "alertmanager@mon-app.local"
+      smtp_auth_username: "your-email@gmail.com"
+      smtp_auth_password: "your-app-password"
+
+    route:
+      group_by:        ["alertname", "namespace"]
+      group_wait:      30s
+      group_interval:  5m
+      repeat_interval: 4h
+      receiver:        "email-receiver"
+
+    receivers:
+      - name: "email-receiver"
+        email_configs:
+          - to: "devops-team@mon-app.local"
+            send_resolved: true

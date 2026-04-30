@@ -1,0 +1,17 @@
+---
+# k8s/service.yml
+apiVersion: v1
+kind: Service
+metadata:
+  name: mon-app-service
+  namespace: production
+  labels:
+    app: mon-app
+spec:
+  selector:
+    app: mon-app
+  ports:
+    - protocol: TCP
+      port:       80
+      targetPort: 5000
+  type: ClusterIP

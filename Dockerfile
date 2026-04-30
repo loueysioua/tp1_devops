@@ -13,8 +13,8 @@ COPY requirements.txt .
 # --no-cache-dir évite de stocker les fichiers temporaires de pip (réduit la taille de l'image)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 6. Copie du reste du code source
-COPY app.py .
+# 6. Copie du reste du code source (incluant les tests)
+COPY . .
 
 # 7. Changement de propriétaire des fichiers pour notre utilisateur non-root
 RUN chown -R appuser:appgroup /app
