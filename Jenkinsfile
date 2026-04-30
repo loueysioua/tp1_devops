@@ -32,11 +32,12 @@ pipeline {
             steps {
                 echo 'Analyse du code avec SonarQube...'
                 script {
-                    // Si sonar-scanner est configuré comme un outil Jenkins (Global Tool Configuration)
-                    // on peut l'appeler ainsi. Sinon, on utilise la commande directe.
-                    // def scannerHome = tool 'sonar-scanner'
+                    // On récupère le chemin de l'outil configuré dans Jenkins (nommé 'sonar-scanner')
+                    def scannerHome = tool 'sonar-scanner'
+                    
                     withSonarQubeEnv('sonarqube') {
-                        sh 'sonar-scanner'
+                        // On utilise le chemin complet vers l'exécutable
+                        sh "${scannerHome}/bin/sonar-scanner"
                     }
                 }
             }
