@@ -29,16 +29,10 @@ pipeline {
         }
 
         stage('Static Analysis') {
-            steps {
+           steps {
                 echo 'Analyse du code avec SonarQube...'
-                script {
-                    // On récupère le chemin de l'outil configuré dans Jenkins (nommé 'sonar-scanner')
-                    def scannerHome = tool 'sonar-scanner'
-                    
-                    withSonarQubeEnv('sonarqube') {
-                        // On utilise le chemin complet vers l'exécutable
-                        sh "${scannerHome}/bin/sonar-scanner"
-                    }
+                withSonarQubeEnv('sonarqube') {
+                    sh 'sonar-scanner'
                 }
             }
         }

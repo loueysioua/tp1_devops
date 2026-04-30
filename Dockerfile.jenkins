@@ -9,6 +9,14 @@ RUN apt-get update && \
     apt-get install -y docker.io python3 python3-pip python3-venv && \
     rm -rf /var/lib/apt/lists/*
 
+# Installation du Sonar Scanner CLI
+RUN apt-get update && apt-get install -y wget unzip && \
+    wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip && \
+    unzip sonar-scanner-cli-5.0.1.3006-linux.zip -d /opt && \
+    rm sonar-scanner-cli-5.0.1.3006-linux.zip
+# Ajout au PATH
+ENV PATH="$PATH:/opt/sonar-scanner-5.0.1.3006-linux/bin"
+
 # On reste délibérément en utilisateur root pour ce TP
 # Cela évitera les problèmes de permissions "Permission denied"
 # au moment de lire le fichier docker.sock de ta machine hôte.
