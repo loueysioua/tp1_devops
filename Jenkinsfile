@@ -28,10 +28,10 @@ pipeline {
         }
 
         stage('Debug Network') {
-    steps {
-        sh "docker network ls --format '{{.Name}}' | grep 'app.network'"
-    }
-}
+            steps {
+                sh "docker network ls --format '{{.Name}}' | grep 'app.network'"
+            }
+        }
 
         stage('Analyse Statique (SonarQube)') {
             steps {
