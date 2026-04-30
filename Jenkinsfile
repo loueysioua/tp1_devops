@@ -2,8 +2,7 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME   = "loueysioua/mon-app-devops"
-        APP_NETWORK  = "tp_docker_sioua_louey_app-network"
+        IMAGE_NAME = "loueysioua/mon-app-devops"
     }
 
     stages {
@@ -29,16 +28,28 @@ pipeline {
         }
 
         stage('Analyse Statique (SonarQube)') {
-            agent {
-                docker {
-                    image  'sonarsource/sonar-scanner-cli:latest'
-                    args   "--network ${APP_NETWORK}"
-                    reuseNode true
-                }
-            }
             steps {
+                // withSonarQubeEnv injecte SONAR_HOST_URL et SONAR_AUTH_TOKEN
                 withSonarQubeEnv('sonarqube') {
-                    sh 'sonar-scanner'
+                    script {
+                        def network = sh(
+                            returnStdout: true,
+                            script: "docker network ls --format '{{.Name}}' | grep 'app.network' | head -1"
+                        ).trim()
+
+                        echo "Réseau détecté : ${network}"
+
+                        // On appelle docker run directement — bypasse complètement
+                        // le plugin docker-workflow qui écrase les args réseau
+                        sh """
+                            docker run --rm \
+                                --network ${network} \
+                                -v "${env.WORKSPACE}:/usr/src" \
+                                -e SONAR_HOST_URL="${env.SONAR_HOST_URL}" \
+                                -e SONAR_TOKEN="${env.SONAR_AUTH_TOKEN}" \
+                                sonarsource/sonar-scanner-cli:latest
+                        """
+                    }
                 }
             }
         }
