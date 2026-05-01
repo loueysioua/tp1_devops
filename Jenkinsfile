@@ -27,44 +27,21 @@ pipeline {
         }
 
         stage('Analyse Statique (SonarQube)') {
+            agent {
+                docker {
+                    image 'sonarsource/sonar-scanner-cli:latest'
+                    // The Docker plugin reads the network name from this env var
+                    args '--network tp_docker_sioua_louey_app-network'
+                    reuseNode true
+                }
+            }
             steps {
                 withSonarQubeEnv('sonarqube') {
-                    script {
-                        // ── Debug : affiche toutes les variables injectées par withSonarQubeEnv ──
-                        echo "SONAR_HOST_URL   = ${env.SONAR_HOST_URL}"
-                        echo "SONAR_AUTH_TOKEN = ${env.SONAR_AUTH_TOKEN}"
-                        echo "SONAR_TOKEN      = ${env.SONAR_TOKEN}"
-                        echo "WORKSPACE        = ${env.WORKSPACE}"
-
-                        def network = sh(
-                            returnStdout: true,
-                            script: "docker network ls --format '{{.Name}}' | grep 'app.network' | head -1"
-                        ).trim()
-                        echo "Réseau détecté : ${network}"
-
-                        // Choisit le bon nom de variable token selon la version du plugin
-                        def sonarToken = env.SONAR_AUTH_TOKEN ?: env.SONAR_TOKEN
-
-                        // docker run avec stderr capturé pour voir les erreurs
-                        sh """
-                            set -x
-                            docker run --rm \
-                                --network ${network} \
-                                -v "${env.WORKSPACE}:/usr/src" \
-                                -w /usr/src \
-                                -e SONAR_HOST_URL="${env.SONAR_HOST_URL}" \
-                                -e SONAR_TOKEN="${sonarToken}" \
-                                sonarsource/sonar-scanner-cli:latest \
-                                sonar-scanner \
-                                  -Dsonar.projectKey=mon-app-python \
-                                  -Dsonar.sources=. \
-                                  -Dsonar.host.url="${env.SONAR_HOST_URL}" \
-                        """
-                    }
+                    sh 'sonar-scanner'
                 }
             }
         }
-
+ 
         stage('Quality Gate') {
             steps {
                 timeout(time: 5, unit: 'MINUTES') {
