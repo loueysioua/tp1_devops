@@ -59,7 +59,6 @@ pipeline {
                                   -Dsonar.projectKey=mon-app-python \
                                   -Dsonar.sources=. \
                                   -Dsonar.host.url="${env.SONAR_HOST_URL}" \
-                                  -Dsonar.login="${sonarToken}" 2>&1
                         """
                     }
                 }
