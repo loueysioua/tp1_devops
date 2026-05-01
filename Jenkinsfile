@@ -86,17 +86,15 @@ pipeline {
         stage('Infrastructure Provisioning (Terraform)') {
             agent {
                 docker {
-                    image 'ubuntu:22.04'
+                    image 'hashicorp/terraform:1.5.7'
                     reuseNode true
-                    args '-u root -v /var/run/docker.sock:/var/run/docker.sock --network host'
+                    // Docker socket for terraform docker provider
+                    // --network host so terraform can reach local services
+                    args '-u root --network host -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""'
                 }
             }
             steps {
                 sh '''
-                    apt-get update && apt-get install -y curl unzip docker.io
-                    curl -fsSL https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip -o terraform.zip
-                    unzip terraform.zip
-                    mv terraform /usr/local/bin/
                     terraform init
                     terraform validate
                     terraform plan -out=tfplan
@@ -108,19 +106,16 @@ pipeline {
         stage('Configuration & Deploy (Ansible)') {
             agent {
                 docker {
-                    image 'willhallonline/ansible:latest'
+                    image 'cytopia/ansible:latest'
                     reuseNode true
                     args '--network host -u root'
                 }
             }
             steps {
-                withEnv(["K8S_AUTH_KUBECONFIG=${WORKSPACE}/kubeconfig"]) {
-                    sh """
-                        pip install kubernetes
-                        ansible-playbook -i hosts.ini deploy.yml \
-                            --extra-vars "image_tag=latest image_name=${IMAGE_NAME} k8s_namespace=production"
-                    """
-                }
+                sh """
+                    ansible-playbook -i hosts.ini deploy.yml \
+                        --extra-vars "image_tag=latest image_name=${IMAGE_NAME} k8s_namespace=production"
+                """
             }
         }
 
