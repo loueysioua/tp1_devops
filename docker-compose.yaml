@@ -1,7 +1,6 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  # 1. Le service Base de données
   db-service:
     image: redis:alpine
     command: redis-server --appendonly yes
@@ -10,7 +9,6 @@ services:
     networks:
       - app-network
 
-  # 2. Le service Application Web
   web:
     image: counter-app:1.0
     build: .
@@ -21,7 +19,6 @@ services:
     depends_on:
       - db-service
 
-  # 3. Le service Jenkins
   jenkins:
     build:
       context: .
@@ -35,7 +32,6 @@ services:
     networks:
       - app-network
 
-  # 4. Le service SonarQube
   sonarqube:
     image: sonarqube:lts-community
     ports:
@@ -46,7 +42,6 @@ services:
       - SONAR_JDBC_URL=jdbc:postgresql://sonar-db:5432/sonar
       - SONAR_JDBC_USERNAME=sonar
       - SONAR_JDBC_PASSWORD=sonar
-      - SONAR_FORCEAUTHENTICATION=false
     volumes:
       - sonarqube-data:/opt/sonarqube/data
       - sonarqube-extensions:/opt/sonarqube/extensions
@@ -54,7 +49,6 @@ services:
     depends_on:
       - sonar-db
 
-  # 5. Base de données pour SonarQube
   sonar-db:
     image: postgres:15-alpine
     networks:
@@ -66,24 +60,10 @@ services:
     volumes:
       - sonar-db-data:/var/lib/postgresql/data
 
-  # 6. Utilitaire pour le scan Sonar (utilisé par le Makefile)
-  sonar-scanner:
-    image: sonarsource/sonar-scanner-cli
-    volumes:
-      - .:/usr/src
-    networks:
-      - app-network
-    environment:
-      - SONAR_HOST_URL=http://sonarqube:9000
-    depends_on:
-      - sonarqube
-
-# 3. Déclaration du réseau
 networks:
   app-network:
     driver: bridge
 
-# 4. Déclaration du volume persistant
 volumes:
   redis-data:
   jenkins-data:
@@ -91,4 +71,3 @@ volumes:
   sonarqube-extensions:
   sonarqube-logs:
   sonar-db-data:
-
