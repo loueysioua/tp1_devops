@@ -82,6 +82,55 @@ pipeline {
                 }
             }
         }
+
+        stage('Infrastructure Provisioning (Terraform)') {
+            agent {
+                docker {
+                    image 'hashicorp/terraform:latest'
+                    reuseNode true
+                    args '-u root -v /var/run/docker.sock:/var/run/docker.sock'
+                }
+            }
+            steps {
+                sh '''
+                    apk add --no-cache docker-cli
+                    terraform init
+                    terraform validate
+                    terraform plan -out=tfplan
+                    terraform apply -auto-approve tfplan
+                '''
+            }
+        }
+
+        stage('Configuration & Deploy (Ansible)') {
+            agent {
+                docker {
+                    image 'willhallonline/ansible:latest'
+                    reuseNode true
+                    args '--network host -u root'
+                }
+            }
+            steps {
+                withEnv(["K8S_AUTH_KUBECONFIG=${WORKSPACE}/kubeconfig"]) {
+                    sh """
+                        pip install kubernetes
+                        ansible-playbook -i hosts.ini deploy.yml \
+                            --extra-vars "image_tag=latest image_name=${IMAGE_NAME} k8s_namespace=production"
+                    """
+                }
+            }
+        }
+
+        stage('Smoke Test') {
+            steps {
+                sh '''
+                    echo "Attente du démarrage des pods..."
+                    sleep 10
+                    STATUS=$(curl -H "Host: mon-app.local" -o /dev/null -s -w "%{http_code}" --max-time 10 http://localhost:8081 || echo "000")
+                    echo "HTTP Status: ${STATUS}"
+                '''
+            }
+        }
     }
 
     post {

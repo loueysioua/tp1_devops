@@ -14,14 +14,7 @@
 
   tasks:
 
-    # ── 1. Récupération du kubeconfig EKS ────────────────────────────────────
-
-    - name: "Récupération du kubeconfig depuis AWS EKS"
-      shell: >
-        aws eks update-kubeconfig
-        --name devops-tp-cluster
-        --region eu-west-1
-      changed_when: false
+    # (La configuration Kubeconfig est directement fournie par Terraform dans ./kubeconfig)
 
     # ── 2. Création du namespace si absent ───────────────────────────────────
 
@@ -32,6 +25,25 @@
         name: "{{ k8s_namespace }}"
         state: present
 
+    # ── 2.5. Déploiement de l'Ingress Controller NGINX (pour KinD) ───────────
+
+    - name: "Installation du Ingress Controller NGINX"
+      kubernetes.core.k8s:
+        state: present
+        src: https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+
+    - name: "Attente du démarrage de l'Ingress Controller"
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: ingress-nginx-controller
+        namespace: ingress-nginx
+        wait: yes
+        wait_condition:
+          type: Available
+          status: "True"
+        wait_timeout: 120
+
     # ── 3. Déploiement des manifests Kubernetes ───────────────────────────────
 
     - name: "Application des manifests Kubernetes"
@@ -39,15 +51,21 @@
         state: present
         template: "{{ item }}"
       loop:
-        - "../k8s/deployment.yml.j2"
-        - "../k8s/service.yml"
-        - "../k8s/ingress.yml"
+        - "redis.yml"
+        - "deployment.yml.j2"
+        - "service.yml"
+        - "ingress.yml"
 
     # ── 4. Attente de la disponibilité du déploiement ────────────────────────
 
     - name: "Attente du rollout du Deployment"
-      kubernetes.core.k8s_rollout_status:
-        kind:      Deployment
-        name:      mon-app
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: mon-app
         namespace: "{{ k8s_namespace }}"
-        timeout:   300
+        wait: yes
+        wait_condition:
+          type: Available
+          status: "True"
+        wait_timeout: 300
