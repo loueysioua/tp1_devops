@@ -90,11 +90,12 @@ pipeline {
                 sh """
                     docker run --rm \
                         --network host \
+                        --entrypoint sh \
                         -v /var/run/docker.sock:/var/run/docker.sock \
                         -v ${env.WORKSPACE}:/workspace \
                         -w /workspace \
                         hashicorp/terraform:1.5.7 \
-                        sh -c "terraform init && terraform validate && terraform plan -out=tfplan && terraform apply -auto-approve tfplan"
+                        -c "terraform init && terraform validate && terraform plan -out=tfplan && terraform apply -auto-approve tfplan"
                 """
             }
         }
