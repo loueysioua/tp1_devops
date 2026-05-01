@@ -2,17 +2,18 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "loueysioua/mon-app-devops"
+        IMAGE_NAME  = "loueysioua/mon-app-devops"
+        APP_NETWORK = "tp_docker_sioua_louey_app-network"
     }
 
     stages {
         stage('Checkout') {
             steps {
-                echo 'Récupération du code source depuis Git...'
                 checkout scm
             }
         }
 
+        // ✅ agent { docker } works fine — python:alpine has sh
         stage('Build & Tests Unitaires') {
             agent {
                 docker {
@@ -26,12 +27,12 @@ pipeline {
             }
         }
 
+        // ✅ agent { docker } works fine — sonar image has sh
         stage('Analyse Statique (SonarQube)') {
             agent {
                 docker {
                     image 'sonarsource/sonar-scanner-cli:latest'
-                    // The Docker plugin reads the network name from this env var
-                    args '--network tp_docker_sioua_louey_app-network'
+                    args  "--network ${APP_NETWORK}"
                     reuseNode true
                 }
             }
@@ -41,7 +42,7 @@ pipeline {
                 }
             }
         }
- 
+
         stage('Quality Gate') {
             steps {
                 timeout(time: 5, unit: 'MINUTES') {
@@ -56,9 +57,9 @@ pipeline {
             }
         }
 
+        // ✅ docker run directly — bypasses agent { docker } shell issue
         stage('Image Scanning (Trivy)') {
             steps {
-                echo '🛡️  Scan de vulnérabilités avec Trivy...'
                 sh """
                     docker run --rm \
                         -v /var/run/docker.sock:/var/run/docker.sock \
@@ -83,38 +84,32 @@ pipeline {
             }
         }
 
+        // ✅ docker run directly — hashicorp/terraform has no bash, agent { docker } fails
         stage('Infrastructure Provisioning (Terraform)') {
-            agent {
-                docker {
-                    image 'hashicorp/terraform:1.5.7'
-                    reuseNode true
-                    // Docker socket for terraform docker provider
-                    // --network host so terraform can reach local services
-                    args '-u root --network host -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""'
-                }
-            }
             steps {
-                sh '''
-                    terraform init
-                    terraform validate
-                    terraform plan -out=tfplan
-                    terraform apply -auto-approve tfplan
-                '''
+                sh """
+                    docker run --rm \
+                        --network host \
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        -v ${env.WORKSPACE}:/workspace \
+                        -w /workspace \
+                        hashicorp/terraform:1.5.7 \
+                        sh -c "terraform init && terraform validate && terraform plan -out=tfplan && terraform apply -auto-approve tfplan"
+                """
             }
         }
 
+        // ✅ docker run directly — same pattern, no bash dependency
         stage('Configuration & Deploy (Ansible)') {
-            agent {
-                docker {
-                    image 'cytopia/ansible:latest'
-                    reuseNode true
-                    args '--network host -u root'
-                }
-            }
             steps {
                 sh """
-                    ansible-playbook -i hosts.ini deploy.yml \
-                        --extra-vars "image_tag=latest image_name=${IMAGE_NAME} k8s_namespace=production"
+                    docker run --rm \
+                        --network host \
+                        -v ${env.WORKSPACE}:/ansible \
+                        -w /ansible \
+                        cytopia/ansible:latest \
+                        ansible-playbook -i hosts.ini deploy.yml \
+                            --extra-vars "image_tag=latest image_name=${IMAGE_NAME} k8s_namespace=production"
                 """
             }
         }
@@ -124,7 +119,8 @@ pipeline {
                 sh '''
                     echo "Attente du démarrage des pods..."
                     sleep 10
-                    STATUS=$(curl -H "Host: mon-app.local" -o /dev/null -s -w "%{http_code}" --max-time 10 http://localhost:8081 || echo "000")
+                    STATUS=$(curl -H "Host: mon-app.local" -o /dev/null -s -w "%{http_code}" \
+                        --max-time 10 http://localhost:8081 || echo "000")
                     echo "HTTP Status: ${STATUS}"
                 '''
             }
