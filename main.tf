@@ -1,56 +1,50 @@
-# terraform/main.tf
-# Provisionne un cluster Kubernetes local avec KinD (Kubernetes in Docker)
-
 terraform {
-  required_version = ">= 1.0"
-
   required_providers {
-    kind = {
-      source  = "tehcyx/kind"
-      version = "~> 0.5.0"
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 3.0"
     }
   }
 }
 
-provider "kind" {}
+provider "docker" {
+  host = "unix:///var/run/docker.sock"
+}
 
-resource "kind_cluster" "default" {
-  name           = var.project_name
-  wait_for_ready = true
+# Réseau applicatif
+resource "docker_network" "app_network" {
+  name = "terraform-app-network"
+}
 
-  kind_config {
-    kind       = "Cluster"
-    api_version = "kind.x-k8s.io/v1alpha4"
+# Conteneur Redis
+resource "docker_container" "redis" {
+  name  = "tf-db-service"
+  image = "redis:alpine"
 
-    node {
-      role = "control-plane"
-      
-      # Préparation pour un Ingress Controller local
-      kubeadm_config_patches = [
-        "kind: InitConfiguration\nnodeRegistration:\n  kubeletExtraArgs:\n    node-labels: \"ingress-ready=true\"\n"
-      ]
-      
-      # Mappage des ports pour pouvoir accéder à l'application depuis localhost
-      extra_port_mappings {
-        container_port = 80
-        host_port      = 8081
-      }
-    }
+  command = ["redis-server", "--appendonly", "yes"]
+
+  networks_advanced {
+    name = docker_network.app_network.name
   }
 }
 
-# Crée un fichier kubeconfig local pour qu'Ansible puisse l'utiliser
-resource "local_file" "kubeconfig" {
-  content  = kind_cluster.default.kubeconfig
-  filename = "${path.module}/kubeconfig"
-}
+# Conteneur Flask
+resource "docker_container" "web" {
+  name  = "tf-web"
+  image = var.image_name
 
-output "cluster_name" {
-  description = "Nom du cluster KinD"
-  value       = kind_cluster.default.name
-}
+  ports {
+    internal = 5000
+    external = var.host_port
+  }
 
-output "cluster_endpoint" {
-  description = "Endpoint de l'API Kubernetes"
-  value       = kind_cluster.default.endpoint
+  env = [
+    "REDIS_HOST=tf-db-service"
+  ]
+
+  networks_advanced {
+    name = docker_network.app_network.name
+  }
+
+  depends_on = [docker_container.redis]
 }

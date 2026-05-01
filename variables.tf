@@ -1,25 +1,11 @@
-# terraform/variables.tf
-
-variable "aws_region" {
-  description = "Région AWS cible"
+variable "image_name" {
+  description = "Image Docker à déployer"
   type        = string
-  default     = "eu-west-1"
+  default     = "loueysioua/mon-app-devops:latest"
 }
 
-variable "project_name" {
-  description = "Nom du projet (utilisé pour tagger les ressources)"
-  type        = string
-  default     = "devops-tp"
-}
-
-variable "environment" {
-  description = "Environnement (dev, staging, production)"
-  type        = string
-  default     = "production"
-}
-
-variable "node_instance_type" {
-  description = "Type d'instance EC2 pour les nœuds EKS"
-  type        = string
-  default     = "t3.medium"
+variable "host_port" {
+  description = "Port exposé sur la machine hôte"
+  type        = number
+  default     = 8081
 }

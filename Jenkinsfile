@@ -57,7 +57,6 @@ pipeline {
             }
         }
 
-        // ✅ docker run directly — bypasses agent { docker } shell issue
         stage('Image Scanning (Trivy)') {
             steps {
                 sh """
@@ -84,7 +83,6 @@ pipeline {
             }
         }
 
-        // ✅ docker run directly — hashicorp/terraform has no bash, agent { docker } fails
         stage('Infrastructure Provisioning (Terraform)') {
             steps {
                 sh """
