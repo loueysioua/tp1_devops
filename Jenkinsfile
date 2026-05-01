@@ -81,27 +81,30 @@ pipeline {
             }
         }
 
-        stage('Debug Workspace') {
-    steps {
-        sh 'ls -la ${WORKSPACE}/*.tf || echo "NO .tf FILES FOUND"'
-    }
-}
-
         stage('Infrastructure Provisioning (Terraform)') {
             steps {
-                sh """
-                    docker run --rm \
-                        --network host \
-                        --entrypoint sh \
-                        -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v ${env.WORKSPACE}:/workspace \
-                        -w /workspace \
-                        hashicorp/terraform:1.5.7 \
-                        -c "terraform init && \
-                            terraform validate && \
-                            terraform plan -var='image_tag=${BUILD_NUMBER}' -out=tfplan && \
-                            terraform apply -auto-approve tfplan"
-                """
+                script {
+                    // Write terraform commands to a script file to avoid shell quoting issues
+                    // Using -c "..." strips quotes — a mounted script file is reliable
+                    writeFile file: 'tf-run.sh', text: """\
+#!/bin/sh
+set -e
+terraform init
+terraform validate
+terraform plan -var="image_tag=${BUILD_NUMBER}" -out=tfplan
+terraform apply -auto-approve tfplan
+"""
+                    sh """
+                        docker run --rm \
+                            --network host \
+                            --entrypoint sh \
+                            -v /var/run/docker.sock:/var/run/docker.sock \
+                            -v ${env.WORKSPACE}:/workspace \
+                            -w /workspace \
+                            hashicorp/terraform:1.5.7 \
+                            /workspace/tf-run.sh
+                    """
+                }
             }
         }
 
@@ -143,7 +146,6 @@ pipeline {
             sh 'docker logout || true'
         }
         failure {
-            echo "Pipeline échoué — nettoyage éventuel des conteneurs Terraform..."
             sh """
                 docker stop tf-web tf-db-service 2>/dev/null || true
                 docker rm   tf-web tf-db-service 2>/dev/null || true
