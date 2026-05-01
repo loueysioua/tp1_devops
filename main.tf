@@ -29,7 +29,7 @@ resource "docker_image" "redis" {
 }
 
 resource "docker_container" "redis" {
-  name    = "tf-db-service"
+  name    = "db-service"
   image   = docker_image.redis.image_id
   restart = "unless-stopped"
 
@@ -52,7 +52,7 @@ resource "docker_container" "web" {
   }
 
   # Le nom du conteneur Redis est utilisé comme hostname dans app.py
-  env = ["REDIS_HOST=tf-db-service"]
+  env = ["REDIS_HOST=db-service"]
 
   networks_advanced {
     name = docker_network.app_network.name
