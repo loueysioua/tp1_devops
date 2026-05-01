@@ -1,42 +1,33 @@
 ---
-# deploy.yml
-# Vérifie que les conteneurs Terraform sont bien en vie après terraform apply
-
-- name: "Vérification du déploiement Docker"
+- name: "Vérification du déploiement"
   hosts: localhost
   connection: local
   gather_facts: false
 
   vars:
     image_name: "loueysioua/mon-app-devops"
-    image_tag:  "latest"
-    app_port:   8081
+    image_tag: "latest"
+    app_port: 8081
 
   tasks:
-
-    - name: "Vérification que le conteneur Redis tourne"
-      command: docker inspect -f '{{ "{{.State.Running}}" }}' tf-db-service
-      register: redis_status
-      failed_when: redis_status.stdout != "true"
-
-    - name: "Vérification que le conteneur Web tourne"
-      command: docker inspect -f '{{ "{{.State.Running}}" }}' tf-web
-      register: web_status
-      failed_when: web_status.stdout != "true"
-
-    - name: "Health check HTTP sur /health"
+    - name: "Attente que l'application réponde sur /health"
       uri:
         url: "http://localhost:{{ app_port }}/health"
         method: GET
         status_code: 200
-        timeout: 10
-      retries: 5
+        timeout: 5
+      register: health_result
+      retries: 10
       delay: 3
+      until: health_result.status == 200
+
+    - name: "Vérification de la route principale /"
+      uri:
+        url: "http://localhost:{{ app_port }}/"
+        method: GET
+        status_code: 200
+        timeout: 5
 
     - name: "Résumé du déploiement"
       debug:
-        msg: >
-          ✅ Déploiement OK —
-          Redis: {{ redis_status.stdout }},
-          Web: {{ web_status.stdout }},
-          URL: http://localhost:{{ app_port }}
+        msg: "✅ Déploiement OK — {{ image_name }}:{{ image_tag }} répond sur http://localhost:{{ app_port }}"
