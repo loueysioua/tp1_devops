@@ -84,11 +84,13 @@ pipeline {
         stage('Infrastructure Provisioning (Terraform)') {
             steps {
                 script {
-                    // Write the terraform script inside the Jenkins container
-                    sh '''
-                        printf '#!/bin/sh\nset -e\nterraform init\nterraform validate\nterraform plan -var="image_tag=$BUILD_NUMBER" -out=tfplan\nterraform apply -auto-approve tfplan\n' > "$WORKSPACE/tf-run.sh"
-                        chmod +x "$WORKSPACE/tf-run.sh"
-                    '''
+                    // Write the build number directly into the script using Groovy interpolation
+                    // Single-quoted sh blocks don't expand $BUILD_NUMBER inside the container
+                    sh """
+                        printf '#!/bin/sh\\nset -e\\nterraform init\\nterraform validate\\nterraform plan -var="image_tag=${BUILD_NUMBER}" -out=tfplan\\nterraform apply -auto-approve tfplan\\n' > "\$WORKSPACE/tf-run.sh"
+                        chmod +x "\$WORKSPACE/tf-run.sh"
+                        echo "Script content:"; cat "\$WORKSPACE/tf-run.sh"
+                    """
 
                     // Get the Jenkins container ID so we can share its volumes
                     def jenkinsId = sh(
