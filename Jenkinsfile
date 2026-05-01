@@ -58,12 +58,12 @@ pipeline {
         stage('Image Scanning (Trivy)') {
             steps {
                 sh """
-                    docker run --rm \
-                        -v /var/run/docker.sock:/var/run/docker.sock \
-                        aquasec/trivy:latest image \
-                        --severity CRITICAL \
-                        --exit-code 0 \
-                        --no-progress \
+                    docker run --rm \\
+                        -v /var/run/docker.sock:/var/run/docker.sock \\
+                        aquasec/trivy:latest image \\
+                        --severity CRITICAL \\
+                        --exit-code 0 \\
+                        --no-progress \\
                         ${IMAGE_NAME}:${BUILD_NUMBER}
                 """
             }
@@ -83,41 +83,39 @@ pipeline {
 
         stage('Infrastructure Provisioning (Terraform)') {
             steps {
-                script {
-                    // Write terraform commands to a script file to avoid shell quoting issues
-                    // Using -c "..." strips quotes — a mounted script file is reliable
-                    writeFile file: 'tf-run.sh', text: """\
-#!/bin/sh
-set -e
-terraform init
-terraform validate
-terraform plan -var="image_tag=${BUILD_NUMBER}" -out=tfplan
-terraform apply -auto-approve tfplan
-"""
-                    sh """
-                        docker run --rm \
-                            --network host \
-                            --entrypoint sh \
-                            -v /var/run/docker.sock:/var/run/docker.sock \
-                            -v ${env.WORKSPACE}:/workspace \
-                            -w /workspace \
-                            hashicorp/terraform:1.5.7 \
-                            /workspace/tf-run.sh
-                    """
-                }
+                // Step 1: write the script via sh so $WORKSPACE is resolved by
+                // the Jenkins shell — guarantees the file lands in the exact
+                // directory that will be mounted (handles @2, @3 suffixes too)
+                sh '''
+                    printf '#!/bin/sh\nset -e\nterraform init\nterraform validate\nterraform plan -var="image_tag=$BUILD_NUMBER" -out=tfplan\nterraform apply -auto-approve tfplan\n' > "$WORKSPACE/tf-run.sh"
+                    chmod +x "$WORKSPACE/tf-run.sh"
+                    echo "Script written to: $WORKSPACE/tf-run.sh"
+                    ls -la "$WORKSPACE/tf-run.sh"
+                '''
+                // Step 2: mount that exact workspace and run the script inside terraform container
+                sh """
+                    docker run --rm \\
+                        --network host \\
+                        --entrypoint sh \\
+                        -v /var/run/docker.sock:/var/run/docker.sock \\
+                        -v ${env.WORKSPACE}:/workspace \\
+                        -w /workspace \\
+                        hashicorp/terraform:1.5.7 \\
+                        /workspace/tf-run.sh
+                """
             }
         }
 
         stage('Verify & Health Check (Ansible)') {
             steps {
                 sh """
-                    docker run --rm \
-                        --network host \
-                        -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v ${env.WORKSPACE}:/ansible \
-                        -w /ansible \
-                        cytopia/ansible:latest \
-                        ansible-playbook -i hosts.ini deploy.yml \
+                    docker run --rm \\
+                        --network host \\
+                        -v /var/run/docker.sock:/var/run/docker.sock \\
+                        -v ${env.WORKSPACE}:/ansible \\
+                        -w /ansible \\
+                        cytopia/ansible:latest \\
+                        ansible-playbook -i hosts.ini deploy.yml \\
                             --extra-vars "image_tag=${BUILD_NUMBER} image_name=${IMAGE_NAME}"
                 """
             }
@@ -146,10 +144,10 @@ terraform apply -auto-approve tfplan
             sh 'docker logout || true'
         }
         failure {
-            sh """
+            sh '''
                 docker stop tf-web tf-db-service 2>/dev/null || true
                 docker rm   tf-web tf-db-service 2>/dev/null || true
-            """
+            '''
         }
     }
 }
