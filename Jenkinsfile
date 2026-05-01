@@ -81,7 +81,12 @@ pipeline {
             }
         }
 
-        // Terraform déploie les conteneurs Docker directement via le provider kreuzwerker/docker
+        stage('Debug Workspace') {
+    steps {
+        sh 'ls -la ${WORKSPACE}/*.tf || echo "NO .tf FILES FOUND"'
+    }
+}
+
         stage('Infrastructure Provisioning (Terraform)') {
             steps {
                 sh """
@@ -100,7 +105,6 @@ pipeline {
             }
         }
 
-        // Ansible vérifie que les conteneurs sont bien en vie et fait un health check
         stage('Verify & Health Check (Ansible)') {
             steps {
                 sh """
