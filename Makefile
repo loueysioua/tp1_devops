@@ -40,21 +40,21 @@ sonar:
 # ── DÉPLOIEMENT EN LOCAL (100% Dockerisé via KinD) ──
 
 deploy-infra:
-	@echo "🏗️  Création de l'infrastructure avec Terraform (KinD local)..."
+	@echo "🏗️  Création de l'infrastructure avec Terraform..."
 	docker run --rm -it --entrypoint sh \
-		-v "$(PWD):/workspace" -w /workspace \
+		-v "$(PWD)/terraform:/workspace" -w /workspace \
 		-v /var/run/docker.sock:/var/run/docker.sock \
-		hashicorp/terraform:latest -c "apk add --no-cache docker-cli && terraform init"
+		hashicorp/terraform:latest -c "terraform init"
 	docker run --rm -it --entrypoint sh \
-		-v "$(PWD):/workspace" -w /workspace \
+		-v "$(PWD)/terraform:/workspace" -w /workspace \
 		-v /var/run/docker.sock:/var/run/docker.sock \
-		hashicorp/terraform:latest -c "apk add --no-cache docker-cli && terraform apply -auto-approve"
+		hashicorp/terraform:latest -c "terraform apply -auto-approve"
 
 deploy-app:
-	@echo "⚙️  Déploiement avec Ansible sur le cluster local..."
+	@echo "⚙️  Déploiement avec Ansible..."
 	docker run --rm -it --network host \
-		-v "$(PWD):/workspace" -w /workspace \
-		-e K8S_AUTH_KUBECONFIG=/workspace/kubeconfig \
+		-v "$(PWD)/ansible:/workspace" -v "$(PWD)/k8s:/k8s" -w /workspace \
+		-e K8S_AUTH_KUBECONFIG=/k8s/kubeconfig \
 		willhallonline/ansible:latest sh -c "\
 			pip install kubernetes && \
 			ansible-playbook -i hosts.ini deploy.yml \
@@ -68,8 +68,8 @@ smoke-test:
 deploy-monitoring:
 	@echo "📊 Déploiement de Prometheus et Grafana via Helm..."
 	docker run --rm -it --network host --entrypoint sh \
-		-v "$(PWD):/workspace" -w /workspace \
-		-e KUBECONFIG=/workspace/kubeconfig \
+		-v "$(PWD)/monitoring:/workspace" -v "$(PWD)/k8s:/k8s" -w /workspace \
+		-e KUBECONFIG=/k8s/kubeconfig \
 		alpine/helm:latest -c "\
 		helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && \
 		helm repo update && \
@@ -77,21 +77,21 @@ deploy-monitoring:
 		--namespace monitoring --create-namespace -f prometheus-values.yml"
 	@echo "🚨 Déploiement des règles d'alerting..."
 	docker run --rm -it --network host \
-		-v "$(PWD):/workspace" -w /workspace \
-		-e KUBECONFIG=/workspace/kubeconfig \
+		-v "$(PWD)/monitoring:/workspace" -v "$(PWD)/k8s:/k8s" -w /workspace \
+		-e KUBECONFIG=/k8s/kubeconfig \
 		bitnami/kubectl:latest apply -f alerting-rules.yml
 
 pf-grafana:
 	@echo "🔓 Ouverture du port Grafana (3000) sur localhost..."
 	@echo "👉 Identifiants par défaut: admin / DevOps-TP-2024!"
 	docker run --rm -it --network host \
-		-v "$(PWD):/workspace" -w /workspace \
-		-e KUBECONFIG=/workspace/kubeconfig \
+		-v "$(PWD)/k8s:/k8s" -w /k8s \
+		-e KUBECONFIG=/k8s/kubeconfig \
 		bitnami/kubectl:latest port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80
 
 pf-prometheus:
 	@echo "🔓 Ouverture du port Prometheus (9090) sur localhost..."
 	docker run --rm -it --network host \
-		-v "$(PWD):/workspace" -w /workspace \
-		-e KUBECONFIG=/workspace/kubeconfig \
+		-v "$(PWD)/k8s:/k8s" -w /k8s \
+		-e KUBECONFIG=/k8s/kubeconfig \
 		bitnami/kubectl:latest port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090

@@ -87,7 +87,7 @@ pipeline {
                     // Write the build number directly into the script using Groovy interpolation
                     // Single-quoted sh blocks don't expand $BUILD_NUMBER inside the container
                     sh """
-                        printf '#!/bin/sh\\nset -e\\nterraform init\\nterraform validate\\nterraform plan -var="image_tag=${BUILD_NUMBER}" -out=tfplan\\nterraform apply -auto-approve tfplan\\n' > "\$WORKSPACE/tf-run.sh"
+                        printf '#!/bin/sh\\nset -e\\ncd terraform\\nterraform init\\nterraform validate\\nterraform plan -var="image_tag=${BUILD_NUMBER}" -out=tfplan\\nterraform apply -auto-approve tfplan\\n' > "\$WORKSPACE/tf-run.sh"
                         chmod +x "\$WORKSPACE/tf-run.sh"
                         echo "Script content:"; cat "\$WORKSPACE/tf-run.sh"
                     """
@@ -129,7 +129,7 @@ pipeline {
                             --network host \\
                             --volumes-from ${jenkinsId} \\
                             -v /var/run/docker.sock:/var/run/docker.sock \\
-                            -w ${env.WORKSPACE} \\
+                            -w ${env.WORKSPACE}/ansible \\
                             cytopia/ansible:latest \\
                             ansible-playbook -i hosts.ini deploy.yml \\
                                 --extra-vars "image_tag=${BUILD_NUMBER} image_name=${IMAGE_NAME}"
