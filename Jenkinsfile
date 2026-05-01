@@ -56,6 +56,21 @@ pipeline {
             }
         }
 
+        stage('Image Scanning (Trivy)') {
+            steps {
+                echo '🛡️  Scan de vulnérabilités avec Trivy...'
+                sh """
+                    docker run --rm \
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        aquasec/trivy:latest image \
+                        --severity CRITICAL \
+                        --exit-code 0 \
+                        --no-progress \
+                        ${IMAGE_NAME}:${BUILD_NUMBER}
+                """
+            }
+        }
+
         stage('Docker Push') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials',
