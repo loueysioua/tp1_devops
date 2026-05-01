@@ -21,7 +21,6 @@ pipeline {
                 }
             }
             steps {
-                echo 'Installation des dépendances et exécution des tests...'
                 sh 'pip install --no-cache-dir -r requirements.txt'
                 sh 'python -m unittest discover'
             }
@@ -29,25 +28,38 @@ pipeline {
 
         stage('Analyse Statique (SonarQube)') {
             steps {
-                // withSonarQubeEnv injecte SONAR_HOST_URL et SONAR_AUTH_TOKEN
                 withSonarQubeEnv('sonarqube') {
                     script {
+                        // ── Debug : affiche toutes les variables injectées par withSonarQubeEnv ──
+                        echo "SONAR_HOST_URL   = ${env.SONAR_HOST_URL}"
+                        echo "SONAR_AUTH_TOKEN = ${env.SONAR_AUTH_TOKEN}"
+                        echo "SONAR_TOKEN      = ${env.SONAR_TOKEN}"
+                        echo "WORKSPACE        = ${env.WORKSPACE}"
+
                         def network = sh(
                             returnStdout: true,
                             script: "docker network ls --format '{{.Name}}' | grep 'app.network' | head -1"
                         ).trim()
-
                         echo "Réseau détecté : ${network}"
 
-                        // On appelle docker run directement — bypasse complètement
-                        // le plugin docker-workflow qui écrase les args réseau
+                        // Choisit le bon nom de variable token selon la version du plugin
+                        def sonarToken = env.SONAR_AUTH_TOKEN ?: env.SONAR_TOKEN
+
+                        // docker run avec stderr capturé pour voir les erreurs
                         sh """
+                            set -x
                             docker run --rm \
                                 --network ${network} \
                                 -v "${env.WORKSPACE}:/usr/src" \
+                                -w /usr/src \
                                 -e SONAR_HOST_URL="${env.SONAR_HOST_URL}" \
-                                -e SONAR_TOKEN="${env.SONAR_AUTH_TOKEN}" \
-                                sonarsource/sonar-scanner-cli:latest
+                                -e SONAR_TOKEN="${sonarToken}" \
+                                sonarsource/sonar-scanner-cli:latest \
+                                sonar-scanner \
+                                  -Dsonar.projectKey=mon-app-python \
+                                  -Dsonar.sources=. \
+                                  -Dsonar.host.url="${env.SONAR_HOST_URL}" \
+                                  -Dsonar.login="${sonarToken}" 2>&1
                         """
                     }
                 }
@@ -56,7 +68,6 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
-                echo 'Vérification du Quality Gate...'
                 timeout(time: 5, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
@@ -65,14 +76,12 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                echo "Construction de l'image Docker : ${IMAGE_NAME}:${BUILD_NUMBER}..."
                 sh "docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} -t ${IMAGE_NAME}:latest ."
             }
         }
 
         stage('Docker Push') {
             steps {
-                echo 'Publication sur Docker Hub...'
                 withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials',
                                                  passwordVariable: 'DOCKER_PASSWORD',
                                                  usernameVariable: 'DOCKER_USERNAME')]) {
@@ -86,7 +95,6 @@ pipeline {
 
     post {
         always {
-            echo 'Nettoyage : Déconnexion de Docker Hub...'
             sh 'docker logout'
         }
     }
