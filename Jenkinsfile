@@ -86,14 +86,17 @@ pipeline {
         stage('Infrastructure Provisioning (Terraform)') {
             agent {
                 docker {
-                    image 'hashicorp/terraform:latest'
+                    image 'ubuntu:22.04'
                     reuseNode true
-                    args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint="" --network host'
+                    args '-u root -v /var/run/docker.sock:/var/run/docker.sock --network host'
                 }
             }
             steps {
                 sh '''
-                    apk add --no-cache docker-cli
+                    apt-get update && apt-get install -y curl unzip docker.io
+                    curl -fsSL https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip -o terraform.zip
+                    unzip terraform.zip
+                    mv terraform /usr/local/bin/
                     terraform init
                     terraform validate
                     terraform plan -out=tfplan
