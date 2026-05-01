@@ -88,7 +88,7 @@ pipeline {
                 docker {
                     image 'hashicorp/terraform:latest'
                     reuseNode true
-                    args '-u root -v /var/run/docker.sock:/var/run/docker.sock'
+                    args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint="" --network host'
                 }
             }
             steps {
