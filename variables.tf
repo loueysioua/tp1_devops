@@ -1,7 +1,13 @@
 variable "image_name" {
-  description = "Image Docker à déployer"
+  description = "Nom de l'image Docker à déployer"
   type        = string
-  default     = "loueysioua/mon-app-devops:latest"
+  default     = "loueysioua/mon-app-devops"
+}
+
+variable "image_tag" {
+  description = "Tag de l'image Docker"
+  type        = string
+  default     = "latest"
 }
 
 variable "host_port" {

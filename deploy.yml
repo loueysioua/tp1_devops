@@ -1,71 +1,42 @@
 ---
-# ansible/playbooks/deploy.yml
-# Configure le kubeconfig et déploie l'application sur Kubernetes
+# deploy.yml
+# Vérifie que les conteneurs Terraform sont bien en vie après terraform apply
 
-- name: "Configuration du cluster et déploiement de l'application"
+- name: "Vérification du déploiement Docker"
   hosts: localhost
   connection: local
   gather_facts: false
 
   vars:
-    image_name:    "loueysioua/mon-app-devops"
-    image_tag:     "latest"
-    k8s_namespace: "production"
+    image_name: "loueysioua/mon-app-devops"
+    image_tag:  "latest"
+    app_port:   8081
 
   tasks:
 
-    # (La configuration Kubeconfig est directement fournie par Terraform dans ./kubeconfig)
+    - name: "Vérification que le conteneur Redis tourne"
+      command: docker inspect -f '{{ "{{.State.Running}}" }}' tf-db-service
+      register: redis_status
+      failed_when: redis_status.stdout != "true"
 
-    # ── 2. Création du namespace si absent ───────────────────────────────────
+    - name: "Vérification que le conteneur Web tourne"
+      command: docker inspect -f '{{ "{{.State.Running}}" }}' tf-web
+      register: web_status
+      failed_when: web_status.stdout != "true"
 
-    - name: "Création du namespace {{ k8s_namespace }}"
-      kubernetes.core.k8s:
-        api_version: v1
-        kind: Namespace
-        name: "{{ k8s_namespace }}"
-        state: present
+    - name: "Health check HTTP sur /health"
+      uri:
+        url: "http://localhost:{{ app_port }}/health"
+        method: GET
+        status_code: 200
+        timeout: 10
+      retries: 5
+      delay: 3
 
-    # ── 2.5. Déploiement de l'Ingress Controller NGINX (pour KinD) ───────────
-
-    - name: "Installation du Ingress Controller NGINX"
-      kubernetes.core.k8s:
-        state: present
-        src: https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
-
-    - name: "Attente du démarrage de l'Ingress Controller"
-      kubernetes.core.k8s_info:
-        api_version: apps/v1
-        kind: Deployment
-        name: ingress-nginx-controller
-        namespace: ingress-nginx
-        wait: yes
-        wait_condition:
-          type: Available
-          status: "True"
-        wait_timeout: 120
-
-    # ── 3. Déploiement des manifests Kubernetes ───────────────────────────────
-
-    - name: "Application des manifests Kubernetes"
-      kubernetes.core.k8s:
-        state: present
-        template: "{{ item }}"
-      loop:
-        - "redis.yml"
-        - "deployment.yml.j2"
-        - "service.yml"
-        - "ingress.yml"
-
-    # ── 4. Attente de la disponibilité du déploiement ────────────────────────
-
-    - name: "Attente du rollout du Deployment"
-      kubernetes.core.k8s_info:
-        api_version: apps/v1
-        kind: Deployment
-        name: mon-app
-        namespace: "{{ k8s_namespace }}"
-        wait: yes
-        wait_condition:
-          type: Available
-          status: "True"
-        wait_timeout: 300
+    - name: "Résumé du déploiement"
+      debug:
+        msg: >
+          ✅ Déploiement OK —
+          Redis: {{ redis_status.stdout }},
+          Web: {{ web_status.stdout }},
+          URL: http://localhost:{{ app_port }}

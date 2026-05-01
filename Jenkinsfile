@@ -13,7 +13,6 @@ pipeline {
             }
         }
 
-        // ✅ agent { docker } works fine — python:alpine has sh
         stage('Build & Tests Unitaires') {
             agent {
                 docker {
@@ -27,7 +26,6 @@ pipeline {
             }
         }
 
-        // ✅ agent { docker } works fine — sonar image has sh
         stage('Analyse Statique (SonarQube)') {
             agent {
                 docker {
@@ -83,6 +81,7 @@ pipeline {
             }
         }
 
+        // Terraform déploie les conteneurs Docker directement via le provider kreuzwerker/docker
         stage('Infrastructure Provisioning (Terraform)') {
             steps {
                 sh """
@@ -93,22 +92,26 @@ pipeline {
                         -v ${env.WORKSPACE}:/workspace \
                         -w /workspace \
                         hashicorp/terraform:1.5.7 \
-                        -c "terraform init && terraform validate && terraform plan -out=tfplan && terraform apply -auto-approve tfplan"
+                        -c "terraform init && \
+                            terraform validate && \
+                            terraform plan -var='image_tag=${BUILD_NUMBER}' -out=tfplan && \
+                            terraform apply -auto-approve tfplan"
                 """
             }
         }
 
-        // ✅ docker run directly — same pattern, no bash dependency
-        stage('Configuration & Deploy (Ansible)') {
+        // Ansible vérifie que les conteneurs sont bien en vie et fait un health check
+        stage('Verify & Health Check (Ansible)') {
             steps {
                 sh """
                     docker run --rm \
                         --network host \
+                        -v /var/run/docker.sock:/var/run/docker.sock \
                         -v ${env.WORKSPACE}:/ansible \
                         -w /ansible \
                         cytopia/ansible:latest \
                         ansible-playbook -i hosts.ini deploy.yml \
-                            --extra-vars "image_tag=latest image_name=${IMAGE_NAME} k8s_namespace=production"
+                            --extra-vars "image_tag=${BUILD_NUMBER} image_name=${IMAGE_NAME}"
                 """
             }
         }
@@ -116,11 +119,16 @@ pipeline {
         stage('Smoke Test') {
             steps {
                 sh '''
-                    echo "Attente du démarrage des pods..."
-                    sleep 10
-                    STATUS=$(curl -H "Host: mon-app.local" -o /dev/null -s -w "%{http_code}" \
-                        --max-time 10 http://localhost:8081 || echo "000")
+                    echo "Attente du démarrage..."
+                    sleep 5
+                    STATUS=$(curl -o /dev/null -s -w "%{http_code}" \
+                        --max-time 10 http://localhost:8081/health || echo "000")
                     echo "HTTP Status: ${STATUS}"
+                    if [ "$STATUS" != "200" ]; then
+                        echo "Smoke test FAILED"
+                        exit 1
+                    fi
+                    echo "Smoke test OK"
                 '''
             }
         }
@@ -128,7 +136,14 @@ pipeline {
 
     post {
         always {
-            sh 'docker logout'
+            sh 'docker logout || true'
+        }
+        failure {
+            echo "Pipeline échoué — nettoyage éventuel des conteneurs Terraform..."
+            sh """
+                docker stop tf-web tf-db-service 2>/dev/null || true
+                docker rm   tf-web tf-db-service 2>/dev/null || true
+            """
         }
     }
 }
