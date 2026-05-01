@@ -140,18 +140,24 @@ pipeline {
 
         stage('Smoke Test') {
             steps {
-                sh '''
+                // curl runs inside a container on the same network as tf-web
+                // "tf-web:5000" resolves via Docker DNS on terraform-app-network
+                sh """
                     echo "Attente du démarrage..."
                     sleep 5
-                    STATUS=$(curl -o /dev/null -s -w "%{http_code}" \
-                        --max-time 10 http://localhost:8081/health || echo "000")
-                    echo "HTTP Status: ${STATUS}"
-                    if [ "$STATUS" != "200" ]; then
+                    STATUS=\$(docker run --rm \\
+                        --network terraform-app-network \\
+                        curlimages/curl:latest \\
+                        -o /dev/null -s -w "%{http_code}" \\
+                        --max-time 10 \\
+                        http://tf-web:5000/health || echo "000")
+                    echo "HTTP Status: \${STATUS}"
+                    if [ "\${STATUS}" != "200" ]; then
                         echo "Smoke test FAILED"
                         exit 1
                     fi
                     echo "Smoke test OK"
-                '''
+                """
             }
         }
     }
